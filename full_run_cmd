@@ -1,0 +1,7 @@
+python data_generator.py
+cd build
+cmake --build .
+./tracking_system
+cd ..
+python evaluate_results.py
+python animate_fusion.py
