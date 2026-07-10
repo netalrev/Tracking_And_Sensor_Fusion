@@ -4,4 +4,6 @@ cmake --build .
 ./tracking_system
 cd ..
 python evaluate_results.py
+
+python run_experiments.py
 python animate_fusion.py

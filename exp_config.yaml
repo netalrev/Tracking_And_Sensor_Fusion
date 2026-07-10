@@ -1,0 +1,11 @@
+# ==========================================
+# Experiment Control Configuration
+# ==========================================
+experiment:
+  # What to scale? (Options: "noise", "clutter", "drops", "all")
+  target: "all" 
+  
+  # Sweep Parameters
+  start_multiplier: 1
+  max_multiplier: 4
+  step_size: 1.0

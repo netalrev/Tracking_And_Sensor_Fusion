@@ -81,7 +81,7 @@ private:
 
     // Configuration Thresholds for Lifecycle
     // In a full system, these would be loaded from config.yaml
-    static constexpr int HITS_TO_CONFIRM = 7;
+    static constexpr int HITS_TO_CONFIRM = 5;
     static constexpr int MISSES_TO_DEAD = 5;
 
     double time_last_measurement_; // Timestamp of the last measurement (Radar or EO) that updated this track

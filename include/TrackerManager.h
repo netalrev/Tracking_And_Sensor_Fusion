@@ -17,10 +17,12 @@ public:
      * @param radar_csv Path to radar data
      * @param eo_csv Path to eo data
      * @param output_csv Path to save the fused output tracks
+     * @param export_tentative Toggle to export unconfirmed tracks and status column (Default: true)
      */
     TrackerManager(const std::string& radar_csv, 
                    const std::string& eo_csv, 
-                   const std::string& output_csv);
+                   const std::string& output_csv,
+                   bool export_tentative = true);
 
     /**
      * @brief The main execution function. 
@@ -34,6 +36,8 @@ private:
     
     int next_track_id_;
     std::string output_filepath_;
+
+    bool export_tentative_;
 
     // ==========================================
     // Internal Tracking Loop Steps

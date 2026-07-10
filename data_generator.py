@@ -18,9 +18,9 @@ class Target:
         self.id = target_id
         self.start_time = start_time
         self.end_time = end_time
-        self.dt = 0.01 # 100Hz integration for maximum kinematic accuracy
+        self.dt = 0.01 
         self.times = np.arange(0, duration + self.dt, self.dt)
-        self.states = np.zeros((len(self.times), 6)) # State vector: [x, y, z, vx, vy, vz]
+        self.states = np.zeros((len(self.times), 6)) 
         
         pos = np.array(pos0, dtype=float)
         vel = np.array(vel0, dtype=float)
@@ -37,7 +37,6 @@ class Target:
             
             if maneuver_idx < num_maneuvers:
                 man = maneuvers[maneuver_idx]
-                # Maneuvers are based on absolute simulation time
                 if man.get('start_time', 0.0) <= t <= man.get('end_time', duration):
                     turn_rate = np.deg2rad(man.get('turn_rate_deg', 0.0))
                     lon_accel = man.get('lon_accel', 0.0)
@@ -45,7 +44,6 @@ class Target:
                 elif t > man.get('end_time', duration):
                     maneuver_idx += 1
             
-            # Kinematic propagation (Euler Step)
             yaw += turn_rate * self.dt
             speed += lon_accel * self.dt
             z_vel += z_accel * self.dt
@@ -59,11 +57,9 @@ class Target:
             self.states[i, 3:] = vel
 
     def get_state_at(self, t: float):
-        """ Returns the state only if the target is alive at this specific time """
         if self.start_time <= t <= self.end_time:
             state = np.zeros(6)
             for i in range(6):
-                # Linear interpolation for sub-step precision
                 state[i] = np.interp(t, self.times, self.states[:, i])
             return state
         return None
@@ -80,7 +76,6 @@ class Sensor:
         self.rng = rng
 
     def get_num_clutter(self) -> int:
-        """ Returns number of clutter points for current scan based on Poisson distribution """
         return self.rng.poisson(self.clutter_lambda)
 
     def generate_measurements(self, targets: list, duration: float) -> pd.DataFrame:
@@ -91,20 +86,18 @@ class RadarSensor(Sensor):
         timestamps = np.arange(0, duration, 1.0 / self.rate_hz)
         data = []
         
-        # Extract Bias from configuration (defaults to 0.0 if missing)
         b_r = self.bias.get('range_m', 0.0)
         b_az = np.deg2rad(self.bias.get('azimuth_deg', 0.0))
         b_el = np.deg2rad(self.bias.get('elevation_deg', 0.0))
         
         for t in timestamps:
-            # 1. Generate real target measurements
             for target in targets:
                 state = target.get_state_at(t)
                 if state is None:
-                    continue # Target does not exist at this time
+                    continue 
                     
                 if self.rng.random() < self.drop_prob:
-                    continue # Sensor miss (dropout)
+                    continue 
                     
                 x, y, z, vx, vy, vz = state
                 r = np.sqrt(x**2 + y**2 + z**2)
@@ -112,7 +105,6 @@ class RadarSensor(Sensor):
                 el = np.arcsin(z / r)
                 vr = (x*vx + y*vy + z*vz) / r
                 
-                # Add Gaussian noise + constant Bias
                 meas_r = r + self.rng.normal(0, self.noise['range_m']) + b_r
                 meas_az = az + self.rng.normal(0, np.deg2rad(self.noise['azimuth_deg'])) + b_az
                 meas_el = el + self.rng.normal(0, np.deg2rad(self.noise['elevation_deg'])) + b_el
@@ -121,24 +113,23 @@ class RadarSensor(Sensor):
                 data.append({
                     'timestamp': round(t, 3),
                     'sensor': 'RADAR',
-                    'target_id': target.id, # Used ONLY for debugging/visualization
+                    'target_id': target.id, 
                     'range': round(meas_r, 3),
                     'azimuth': round(np.rad2deg(meas_az), 3),
                     'elevation': round(np.rad2deg(meas_el), 3),
                     'radial_velocity': round(meas_vr, 3)
                 })
                 
-            # 2. Generate Clutter (False Alarms) for this scan
             for _ in range(self.get_num_clutter()):
-                c_r = self.rng.uniform(1000, 15000) # Spread in a reasonable range
-                c_az = self.rng.uniform(0, np.pi)   # Spread in azimuth (0 to 180 deg)
-                c_el = self.rng.uniform(0, np.pi/4) # Spread in elevation (0 to 45 deg)
+                c_r = self.rng.uniform(1000, 15000) 
+                c_az = self.rng.uniform(0, np.pi)   
+                c_el = self.rng.uniform(0, np.pi/4) 
                 c_vr = self.rng.uniform(-200, 200)
                 
                 data.append({
                     'timestamp': round(t, 3),
                     'sensor': 'RADAR',
-                    'target_id': 0, # ID 0 represents Clutter / False Target
+                    'target_id': 0, 
                     'range': round(c_r, 3),
                     'azimuth': round(np.rad2deg(c_az), 3),
                     'elevation': round(np.rad2deg(c_el), 3),
@@ -180,7 +171,6 @@ class EOSensor(Sensor):
                     'elevation': round(np.rad2deg(meas_el), 3)
                 })
                 
-            # Generate Clutter for EO
             for _ in range(self.get_num_clutter()):
                 c_az = self.rng.uniform(0, np.pi)
                 c_el = self.rng.uniform(0, np.pi/4)
@@ -196,9 +186,176 @@ class EOSensor(Sensor):
         return pd.DataFrame(data).sort_values(by='timestamp')
 
 # ==========================================
-# Main Execution & Visualization
+# Visualization Modules
 # ==========================================
 
+def get_target_colors(truth_df):
+    unique_targets = [tid for tid in truth_df['target_id'].unique() if tid != 0]
+    cmap = plt.get_cmap('tab10')
+    return {tid: cmap(i % 10) for i, tid in enumerate(unique_targets)}, unique_targets
+
+def setup_figure(radar_is_xyz=True):
+    fig = plt.figure(figsize=(20, 8))
+    # Left: EO (2D)
+    ax_eo = fig.add_subplot(121)
+    ax_eo.set_xlim([-5, 185])
+    ax_eo.set_ylim([-5, 50])
+    ax_eo.set_xlabel('Azimuth [deg]')
+    ax_eo.set_ylabel('Elevation [deg]')
+    ax_eo.grid(True, linestyle='--', alpha=0.6)
+    
+    # Right: RADAR (3D)
+    ax_rad = fig.add_subplot(122, projection='3d')
+    if radar_is_xyz:
+        ax_rad.set_xlim([-5000, 15000])
+        ax_rad.set_ylim([0, 15000])
+        ax_rad.set_zlim([0, 10000])
+        ax_rad.set_xlabel('X [m]')
+        ax_rad.set_ylabel('Y [m]')
+        ax_rad.set_zlabel('Z [m]')
+    else:
+        # Sensor Space (Range, Azimuth, Elevation)
+        ax_rad.set_xlim([0, 20000]) # Max Range ~20km
+        ax_rad.set_ylim([0, 180])   # Azimuth 0-180
+        ax_rad.set_zlim([0, 45])    # Elevation 0-45
+        ax_rad.set_xlabel('Range [m]')
+        ax_rad.set_ylabel('Azimuth [deg]')
+        ax_rad.set_zlabel('Elevation [deg]')
+        
+    return fig, ax_eo, ax_rad
+
+# --- Plotting Builders ---
+
+def plot_gt_eo(ax, truth_df, colors, unique_targets):
+    for target_id in unique_targets:
+        t_df = truth_df[truth_df['target_id'] == target_id]
+        r = np.sqrt(t_df['x']**2 + t_df['y']**2 + t_df['z']**2)
+        az_deg = np.degrees(np.arctan2(t_df['y'], t_df['x']))
+        el_deg = np.degrees(np.arcsin(t_df['z'] / r))
+        
+        ax.plot(az_deg, el_deg, color=colors[target_id], linewidth=1.5, label=f'GT T{target_id}')
+        ax.scatter(az_deg.iloc[0], el_deg.iloc[0], color='lime', marker='o', s=80, edgecolor='black', zorder=5)
+        ax.scatter(az_deg.iloc[-1], el_deg.iloc[-1], color='red', marker='X', s=200, edgecolor='black', zorder=6)
+        ax.text(az_deg.iloc[0], el_deg.iloc[0], f' T{target_id}', color='black', fontweight='bold')
+
+def plot_gt_xyz(ax, truth_df, colors, unique_targets):
+    for target_id in unique_targets:
+        t_df = truth_df[truth_df['target_id'] == target_id]
+        ax.plot(t_df['x'], t_df['y'], t_df['z'], color=colors[target_id], linewidth=1.5, label=f'GT T{target_id}')
+        ax.scatter(t_df['x'].iloc[0], t_df['y'].iloc[0], t_df['z'].iloc[0], color='lime', marker='o', s=80, edgecolor='black', zorder=5)
+        ax.scatter(t_df['x'].iloc[-1], t_df['y'].iloc[-1], t_df['z'].iloc[-1], color='red', marker='X', s=200, edgecolor='black', zorder=6)
+        ax.text(t_df['x'].iloc[0], t_df['y'].iloc[0], t_df['z'].iloc[0], f' T{target_id}', color='black', fontweight='bold')
+
+def plot_gt_rae(ax, truth_df, colors, unique_targets):
+    for target_id in unique_targets:
+        t_df = truth_df[truth_df['target_id'] == target_id]
+        r = np.sqrt(t_df['x']**2 + t_df['y']**2 + t_df['z']**2)
+        az_deg = np.degrees(np.arctan2(t_df['y'], t_df['x']))
+        el_deg = np.degrees(np.arcsin(t_df['z'] / r))
+        
+        ax.plot(r, az_deg, el_deg, color=colors[target_id], linewidth=1.5, label=f'GT T{target_id}')
+        ax.scatter(r.iloc[0], az_deg.iloc[0], el_deg.iloc[0], color='lime', marker='o', s=80, edgecolor='black', zorder=5)
+        ax.scatter(r.iloc[-1], az_deg.iloc[-1], el_deg.iloc[-1], color='red', marker='X', s=200, edgecolor='black', zorder=6)
+        ax.text(r.iloc[0], az_deg.iloc[0], el_deg.iloc[0], f' T{target_id}', color='black', fontweight='bold')
+
+def plot_meas_eo(ax, eo_df):
+    if eo_df.empty: return
+    hits = eo_df[eo_df['target_id'] != 0]
+    clutter = eo_df[eo_df['target_id'] == 0]
+    ax.scatter(hits['azimuth'], hits['elevation'], color='blue', s=20, alpha=0.6, label='EO Hits')
+    if not clutter.empty:
+        ax.scatter(clutter['azimuth'], clutter['elevation'], color='orange', marker='x', s=20, alpha=0.9, label='EO Clutter')
+
+def plot_meas_rae(ax, radar_df):
+    if radar_df.empty: return
+    hits = radar_df[radar_df['target_id'] != 0]
+    clutter = radar_df[radar_df['target_id'] == 0]
+    ax.scatter(hits['range'], hits['azimuth'], hits['elevation'], color='darkorange', s=30, alpha=0.8, edgecolor='black', label='Radar Hits')
+    if not clutter.empty:
+        ax.scatter(clutter['range'], clutter['azimuth'], clutter['elevation'], color='orange', marker='x', s=20, alpha=0.9, label='Radar Clutter')
+
+def plot_meas_xyz(ax, radar_df):
+    if radar_df.empty: return
+    hits = radar_df[radar_df['target_id'] != 0]
+    clutter = radar_df[radar_df['target_id'] == 0]
+    
+    # Convert Hits
+    r, az, el = hits['range'].values, np.deg2rad(hits['azimuth'].values), np.deg2rad(hits['elevation'].values)
+    ax.scatter(r*np.cos(el)*np.cos(az), r*np.cos(el)*np.sin(az), r*np.sin(el), color='darkorange', edgecolor='black', s=30, alpha=0.8, label='Radar Hits')
+    
+    # Convert Clutter
+    if not clutter.empty:
+        cr, caz, cel = clutter['range'].values, np.deg2rad(clutter['azimuth'].values), np.deg2rad(clutter['elevation'].values)
+        ax.scatter(cr*np.cos(cel)*np.cos(caz), cr*np.cos(cel)*np.sin(caz), cr*np.sin(cel), color='orange', marker='x', s=20, alpha=0.9, label='Radar Clutter')
+
+# --- Figure Generators ---
+
+def generate_all_figures(truth_df, radar_df, eo_df):
+    colors, unique_targets = get_target_colors(truth_df)
+    
+    # -------------------------------------------------------------------------
+    # Fig 1: Ground Truth Only (Left: EO Az/El, Right: RADAR XYZ)
+    # -------------------------------------------------------------------------
+    fig1, ax1_eo, ax1_rad = setup_figure(radar_is_xyz=True)
+    plot_gt_eo(ax1_eo, truth_df, colors, unique_targets)
+    plot_gt_xyz(ax1_rad, truth_df, colors, unique_targets)
+    
+    ax1_eo.set_title('Fig 1: Ground Truth Trajectories (Left: EO View)')
+    ax1_rad.set_title('Fig 1: Ground Truth Trajectories (Right: 3D Physical Space)')
+    ax1_eo.legend(fontsize='small')
+    ax1_rad.legend(fontsize='small')
+    fig1.tight_layout()
+    fig1.savefig('data/fig1_ground_truth.png')
+    print("[+] Saved data/fig1_ground_truth.png")
+    
+    # -------------------------------------------------------------------------
+    # Fig 2: Measurements Only (Left: EO Az/El, Right: RADAR R/Az/El)
+    # -------------------------------------------------------------------------
+    fig2, ax2_eo, ax2_rad = setup_figure(radar_is_xyz=False)
+    plot_meas_eo(ax2_eo, eo_df)
+    plot_meas_rae(ax2_rad, radar_df)
+    
+    ax2_eo.set_title('Fig 2: Raw Measurements (Left: EO Az/El)')
+    ax2_rad.set_title('Fig 2: Raw Measurements (Right: RADAR Sensor Space)')
+    ax2_eo.legend(fontsize='small')
+    ax2_rad.legend(fontsize='small')
+    fig2.tight_layout()
+    fig2.savefig('data/fig2_measurements.png')
+    print("[+] Saved data/fig2_measurements.png")
+    
+    # -------------------------------------------------------------------------
+    # Fig 3: Combined in Sensor Space (Left: EO Az/El, Right: RADAR R/Az/El)
+    # -------------------------------------------------------------------------
+    fig3, ax3_eo, ax3_rad = setup_figure(radar_is_xyz=False)
+    plot_gt_eo(ax3_eo, truth_df, colors, unique_targets)
+    plot_meas_eo(ax3_eo, eo_df)
+    plot_gt_rae(ax3_rad, truth_df, colors, unique_targets)
+    plot_meas_rae(ax3_rad, radar_df)
+    
+    ax3_eo.set_title('Fig 3: Combined GT + Meas (Left: EO Sensor Space)')
+    ax3_rad.set_title('Fig 3: Combined GT + Meas (Right: RADAR Sensor Space)')
+    fig3.tight_layout()
+    fig3.savefig('data/fig3_combined_sensor_space.png')
+    print("[+] Saved data/fig3_combined_sensor_space.png")
+    
+    # -------------------------------------------------------------------------
+    # Fig 4: Physical Projection (Left: EO Az/El, Right: RADAR XYZ)
+    # -------------------------------------------------------------------------
+    fig4, ax4_eo, ax4_rad = setup_figure(radar_is_xyz=True)
+    plot_gt_eo(ax4_eo, truth_df, colors, unique_targets)
+    plot_meas_eo(ax4_eo, eo_df)
+    plot_gt_xyz(ax4_rad, truth_df, colors, unique_targets)
+    plot_meas_xyz(ax4_rad, radar_df)
+    
+    ax4_eo.set_title('Fig 4: Physical Projection (Left: EO View)')
+    ax4_rad.set_title('Fig 4: Physical Projection (Right: 3D Physical Space XYZ)')
+    fig4.tight_layout()
+    fig4.savefig('data/fig4_combined_physical_space.png')
+    print("[+] Saved data/fig4_combined_physical_space.png")
+
+# ==========================================
+# Main
+# ==========================================
 def load_config(config_path: str = "config.yaml") -> dict:
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
@@ -219,84 +376,6 @@ def generate_truth_data(targets: list, duration: float, rate_hz: float) -> pd.Da
                 })
     return pd.DataFrame(data)
 
-def visualize_data(truth_df: pd.DataFrame, radar_df: pd.DataFrame, eo_df: pd.DataFrame):
-    fig = plt.figure(figsize=(18, 8))
-    
-    # ---------------------------------------------------------
-    # Subplot 1: 3D World View (Truth + Radar)
-    # ---------------------------------------------------------
-    ax1 = fig.add_subplot(121, projection='3d')
-    unique_targets = [tid for tid in truth_df['target_id'].unique() if tid != 0]
-    cmap = plt.get_cmap('tab10')
-    colors = {tid: cmap(i % 10) for i, tid in enumerate(unique_targets)}
-    
-    # Plot Ground Truth Trajectories
-    for target_id in unique_targets:
-        t_df = truth_df[truth_df['target_id'] == target_id]
-        ax1.plot(t_df['x'], t_df['y'], t_df['z'], 
-                label=f'Target {target_id}', color=colors[target_id], linewidth=2.5)
-        ax1.scatter(t_df['x'].iloc[0], t_df['y'].iloc[0], t_df['z'].iloc[0], 
-                   color=colors[target_id], marker='o', s=80)
-                   
-    ax1.scatter(0, 0, 0, color='black', marker='^', s=200, label='Sensor Origin')
-    
-    if not radar_df.empty:
-        # Plot real target radar measurements (Highlighted)
-        real_radar = radar_df[radar_df['target_id'] != 0]
-        r = real_radar['range'].values
-        az = np.deg2rad(real_radar['azimuth'].values)
-        el = np.deg2rad(real_radar['elevation'].values)
-        radar_x = r * np.cos(el) * np.cos(az)
-        radar_y = r * np.cos(el) * np.sin(az)
-        radar_z = r * np.sin(el)
-        
-        ax1.scatter(radar_x, radar_y, radar_z, color='darkorange', edgecolor='black', s=45, alpha=0.8, label='Radar Hits')
-        
-        # Plot Clutter in faint red crosses
-        clutter_radar = radar_df[radar_df['target_id'] == 0]
-        if not clutter_radar.empty:
-            r = clutter_radar['range'].values
-            az = np.deg2rad(clutter_radar['azimuth'].values)
-            el = np.deg2rad(clutter_radar['elevation'].values)
-            cx = r * np.cos(el) * np.cos(az)
-            cy = r * np.cos(el) * np.sin(az)
-            cz = r * np.sin(el)
-            ax1.scatter(cx, cy, cz, color='red', marker='x', s=20, alpha=0.5, label='Clutter')
-
-    ax1.set_xlabel('X [m]')
-    ax1.set_ylabel('Y [m]')
-    ax1.set_zlabel('Z [m]')
-    ax1.set_title('3D World View (Radar + Truth)')
-    ax1.legend()
-
-    # ---------------------------------------------------------
-    # Subplot 2: 2D Camera Screen View (EO Only)
-    # ---------------------------------------------------------
-    ax2 = fig.add_subplot(122)
-    
-    if not eo_df.empty:
-        # Plot EO target hits
-        for target_id in unique_targets:
-            t_eo_df = eo_df[eo_df['target_id'] == target_id]
-            ax2.scatter(t_eo_df['azimuth'], t_eo_df['elevation'], 
-                        color=colors[target_id], s=20, alpha=0.7, label=f'EO Hits T{target_id}')
-        
-        # Plot EO Clutter
-        clutter_eo = eo_df[eo_df['target_id'] == 0]
-        if not clutter_eo.empty:
-            ax2.scatter(clutter_eo['azimuth'], clutter_eo['elevation'], 
-                        color='red', marker='x', s=15, alpha=0.4, label='EO Clutter')
-    
-    ax2.set_xlabel('Azimuth [deg]')
-    ax2.set_ylabel('Elevation [deg]')
-    ax2.set_title('2D Camera View (EO Sensors)')
-    ax2.grid(True, linestyle='--', alpha=0.6)
-    ax2.legend()
-    
-    plt.tight_layout()
-    plt.savefig('data/dataset_visualization_combined.png')
-    print("[+] Saved combined visualization to data/dataset_visualization_combined.png")
-
 def main():
     print("--- Starting Ultimate Production-Grade Data Generation ---")
     config = load_config()
@@ -306,31 +385,36 @@ def main():
     targets = []
     for t_conf in config['targets']:
         maneuvers = t_conf.get('maneuvers', [])
-        # Extract start and end times to handle track initiation/deletion
         start_t = t_conf.get('start_time', 0.0)
         end_t = t_conf.get('end_time', duration)
         targets.append(Target(t_conf['id'], start_t, end_t, t_conf['initial_position'], t_conf['initial_velocity'], maneuvers, duration))
         
     truth_df = generate_truth_data(targets, duration, config['simulation']['truth_rate_hz'])
     truth_df.to_csv('data/ground_truth.csv', index=False)
-    print(f"[+] Saved data/ground_truth.csv ({len(truth_df)} rows)")
     
     radar = RadarSensor("RADAR", config['sensors']['radar'], rng)
     radar_df = radar.generate_measurements(targets, duration)
-    # Drop target_id to prevent cheating in the C++ tracker algorithm
     radar_export = radar_df.drop(columns=['target_id'])
     radar_export.to_csv('data/radar.csv', index=False)
-    print(f"[+] Saved data/radar.csv ({len(radar_export)} rows, including clutter)")
     
     eo = EOSensor("EO", config['sensors']['eo'], rng)
     eo_df = eo.generate_measurements(targets, duration)
     eo_export = eo_df.drop(columns=['target_id'])
     eo_export.to_csv('data/eo.csv', index=False)
-    print(f"[+] Saved data/eo.csv ({len(eo_export)} rows, including clutter)")
-    
-    # Plot using the data that contains IDs for accurate coloring
-    visualize_data(truth_df, radar_df, eo_df)
-    print("--- Data Generation Complete ---")
+
+    # NEW: Export Noise Config for C++ Kalman Filter
+    radar_noise = config['sensors']['radar']['noise_std']
+    eo_noise = config['sensors']['eo']['noise_std']
+    with open('data/sensor_noise.txt', 'w') as f:
+        # Radar: range, az, el, vr
+        f.write(f"{radar_noise['range_m']} {radar_noise['azimuth_deg']} {radar_noise['elevation_deg']} {radar_noise['radial_vel_ms']}\n")
+        # EO: az, el
+        f.write(f"{eo_noise['azimuth_deg']} {eo_noise['elevation_deg']}\n")
+        
+    print("[+] Exported Noise configuration to data/sensor_noise.txt")
+    print("[+] Data generation complete. Generating Visualization Figures...")
+    generate_all_figures(truth_df, radar_df, eo_df)
+    print("--- Pipeline Execution Complete ---")
 
 if __name__ == "__main__":
     main()

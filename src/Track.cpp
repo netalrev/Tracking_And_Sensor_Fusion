@@ -50,12 +50,12 @@ void Track::update(const Measurement* measurement) {
         
         // =========================================================
         // ARCHITECTURAL FIX: 
-        // מצלמה מורשית להאריך חיים רק למטרה שכבר אושרה (CONFIRMED)
+        // ?מצלמה מורשית להאריך חיים רק למטרה שכבר אושרה (CONFIRMED)
         // =========================================================
-        if (state_ == TrackState::CONFIRMED) {
-            missed_updates_ = 0; 
-            time_last_measurement_ = measurement->getTimestamp();
-        }
+        // if (state_ == TrackState::CONFIRMED) {
+        //     missed_updates_ = 0;
+        //     time_last_measurement_ = measurement->getTimestamp();
+        // }
     }
 
     if (state_ == TrackState::TENTATIVE && hit_streak_ >= HITS_TO_CONFIRM) {

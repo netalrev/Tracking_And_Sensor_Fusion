@@ -1,6 +1,9 @@
 build/
 temp/
 docs/
+venv/
+tests/
+data/
 __pycache__/
 *.pyc
 *.o

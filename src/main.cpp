@@ -15,8 +15,13 @@ int main() {
         const std::string eo_file = "../data/eo.csv";
         const std::string output_file = "../data/fused_tracks.csv";
 
+        // ==========================================
+        // TOGGLE: True for Animations (includes TENTATIVE), False for classic Evaluation (CONFIRMED only)
+        // ==========================================
+        bool enable_extended_export = true;
+
         // Initialize the Tracker Manager
-        TrackerManager tracker(radar_file, eo_file, output_file);
+        TrackerManager tracker(radar_file, eo_file, output_file, enable_extended_export);
 
         // Execute the event-driven tracking loop
         tracker.run();
