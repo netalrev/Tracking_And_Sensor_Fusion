@@ -3,9 +3,9 @@
 # ==========================================
 experiment:
   # What to scale? (Options: "noise", "clutter", "drops", "all")
-  target: "all" 
+  target: "drops" 
   
   # Sweep Parameters
   start_multiplier: 1
-  max_multiplier: 4
-  step_size: 1.0
+  max_multiplier: 5
+  step_size: 0.5
