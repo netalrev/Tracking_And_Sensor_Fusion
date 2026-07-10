@@ -12,10 +12,10 @@ warnings.filterwarnings("ignore")
 
 def load_data():
     print("[+] Loading Tracking Data for Evaluation...")
-    gt_df = pd.read_csv('data/ground_truth.csv')
-    radar_df = pd.read_csv('data/radar.csv')
-    eo_df = pd.read_csv('data/eo.csv')
-    fused_df = pd.read_csv('data/fused_tracks.csv')
+    gt_df = pd.read_csv('../data/ground_truth.csv')
+    radar_df = pd.read_csv('../data/radar.csv')
+    eo_df = pd.read_csv('../data/eo.csv')
+    fused_df = pd.read_csv('../results/fused_tracks.csv')
     
     # Ensure 'status' column exists in fused_df (Backward compatibility)
     if 'status' not in fused_df.columns:
@@ -59,7 +59,7 @@ def evaluate_metrics(gt_df, fused_df):
         f_end_time = f_group['timestamp'].max()
         f_start_pos = f_group.iloc[0][['x', 'y', 'z']].values
         
-        # --- ROBUST GT MATCHING (Trajectory-Based) ---
+        # Robust Ground Truth (GT) Matching (Trajectory-Based)
         matched_gt_id = -1
         min_early_dist = float('inf')
         
@@ -112,7 +112,7 @@ def evaluate_metrics(gt_df, fused_df):
                                on='timestamp', direction='nearest', 
                                suffixes=('_est', '_gt'))
         
-        # CUT-OFF FIX: Evaluate RMSE *only* when the GT is physically alive!
+        # Prevent invalid math evaluations - Evaluate RMSE only when GT exists natively
         merged = merged[(merged['timestamp'] >= gt_start_time) & (merged['timestamp'] <= gt_end_time)]
         
         if not merged.empty:
@@ -177,7 +177,17 @@ def setup_figure(radar_is_xyz=True):
     return fig, ax_eo, ax_rad
 
 def plot_gt_reference(ax_eo, ax_rad, truth_df, colors, unique_targets, radar_is_xyz):
-    """ Plots the clean GT as dashed lines in the background for reference """
+    """
+    Plots the clean Ground Truth trajectories as dashed lines in the background.
+    
+    Args:
+        ax_eo (matplotlib.axes._subplots.AxesSubplot): The 2D plot axis for Electro-Optical (Az/El) view.
+        ax_rad (matplotlib.axes._subplots.Axes3DSubplot): The 3D/2D plot axis for Radar view.
+        truth_df (pandas.DataFrame): The DataFrame containing Ground Truth positioning.
+        colors (dict): A mapping of target_id to colormap color data.
+        unique_targets (list): A list of valid ground truth target_ids.
+        radar_is_xyz (bool): If True, plots Radar trace in 3D Cartesian. If False, spherical.
+    """
     for target_id in unique_targets:
         t_df = truth_df[truth_df['target_id'] == target_id]
         color = colors[target_id]
@@ -241,7 +251,7 @@ def generate_evaluation_plots(truth_df, fused_df):
     ax5_rad.set_title('Fig 5: EKF Tracks vs GT (Right: RADAR Sensor Space)')
     ax5_eo.legend(fontsize='small')
     fig5.tight_layout()
-    fig5.savefig('data/fig5_eval_sensor_space.png')
+    fig5.savefig('../results/fig5_eval_sensor_space.png')
     
     # -------------------------------------------------------------------------
     # Fig 6: Evaluated Tracks in Physical Space (XYZ)
@@ -254,7 +264,7 @@ def generate_evaluation_plots(truth_df, fused_df):
     ax6_rad.set_title('Fig 6: EKF Tracks vs GT (Right: 3D Physical Space XYZ)')
     ax6_rad.legend(fontsize='small')
     fig6.tight_layout()
-    fig6.savefig('data/fig6_eval_physical_space.png')
+    fig6.savefig('../results/fig6_eval_physical_space.png')
 
 def plot_error_over_time(track_metrics):
     """ Fig 7: Plots the RMSE over time to show filter convergence """
@@ -273,8 +283,8 @@ def plot_error_over_time(track_metrics):
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('data/fig7_rmse_over_time.png')
-    print("[+] Saved data/fig7_rmse_over_time.png")
+    plt.savefig('../results/fig7_rmse_over_time.png')
+    print("[+] Saved ../results/fig7_rmse_over_time.png")
 
 # ==========================================
 # Main Execution

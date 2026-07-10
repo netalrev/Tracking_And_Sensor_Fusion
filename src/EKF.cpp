@@ -3,16 +3,9 @@
 #include <iostream>
 #include <limits>
 
-EKF::EKF() {
+EKF::EKF() : process_noise_variance_(25.0) {
     x_.setZero();
     P_.setIdentity();
-    
-    // Process noise variance (q). 
-    // Represents the variance of unknown accelerations (m/s^2)^2.
-    // Tuning this parameter is crucial: 
-    // Too high -> Filter jitters and follows noise.
-    // Too low -> Filter ignores maneuvers and loses the target.
-    process_noise_variance_ = 25.0; // Assuming max acceleration of ~5 m/s^2 (5^2 = 25)
 }
 
 void EKF::init(const Eigen::VectorXd& z_radar, const Eigen::MatrixXd& R_radar) {
@@ -50,36 +43,24 @@ void EKF::predict(double dt) {
     F(1, 4) = dt; // y = y + vy*dt
     F(2, 5) = dt; // z = z + vz*dt
 
-    // 2. Process Noise Covariance Matrix (Q)
-    // This answers the question: "How does uncertainty grow with time?"
-    // Using the Discrete White Noise Acceleration Model.
+    // Process Noise Covariance Matrix (Q)
     double dt2 = dt * dt;
     double dt3 = dt2 * dt;
     double dt4 = dt3 * dt;
     
-    // --- ADAPTIVE PROCESS NOISE ---
-    // Calculate current velocity magnitude
+    // Adaptive Process Noise: scales naturally with velocity magnitude
     double vx = x_(3);
     double vy = x_(4);
     double vz = x_(5);
     double v_mag = std::sqrt(vx*vx + vy*vy + vz*vz);
     
-    // The variance 'q' now scales with the speed of the target.
-    // Base variance (process_noise_variance_) + adaptive scaling (e.g., adaptive_scaling_factor * speed)
-    double adaptive_scaling_factor = 1.0; // Tunable parameter: How much to increase process noise with speed
+    double adaptive_scaling_factor = 1.0; 
     double q = process_noise_variance_ + (adaptive_scaling_factor * v_mag);
     
-    // ------------------------------
-
     Matrix6d Q = Matrix6d::Zero();
     
-    // Position-Position covariance grows with dt^4
     Q(0, 0) = Q(1, 1) = Q(2, 2) = (dt4 / 4.0) * q;
-    
-    // Position-Velocity covariance grows with dt^3
     Q(0, 3) = Q(3, 0) = Q(1, 4) = Q(4, 1) = Q(2, 5) = Q(5, 2) = (dt3 / 2.0) * q;
-    
-    // Velocity-Velocity covariance grows with dt^2
     Q(3, 3) = Q(4, 4) = Q(5, 5) = dt2 * q;
 
     // 3. Perform Prediction Steps
@@ -90,18 +71,11 @@ void EKF::predict(double dt) {
     P_ = F * P_ * F.transpose() + Q;
 }
 
-// ==========================================
-// Helper Function: Angle Normalization
-// ==========================================
-// Ensures angles are strictly within the [-PI, PI] range.
+// Helper Function: Angle Normalization to strictly keep angles within [-PI, PI]
 static void normalizeAngle(double& angle) {
     while (angle > M_PI)  angle -= 2.0 * M_PI;
     while (angle < -M_PI) angle += 2.0 * M_PI;
 }
-
-// ==========================================
-// Sub-step 2.3: Update & Jacobians
-// ==========================================
 
 void EKF::updateRadar(const Eigen::VectorXd& z, const Eigen::MatrixXd& R) {
     // 1. Map predicted Cartesian state to predicted Spherical measurement (h(X))
@@ -143,18 +117,10 @@ void EKF::updateRadar(const Eigen::VectorXd& z, const Eigen::MatrixXd& R) {
 
 void EKF::updateEO(const Eigen::VectorXd& z, const Eigen::MatrixXd& R) {
 
-    // =========================================================
-    // ELEGANT FUSION: Adaptive Measurement Noise (Dynamic R)
-    // The further the target, the more we distrust the 2D bearing 
-    // due to Line-of-Sight ambiguities. 
-    // =========================================================
+    // Adaptive Measurement Noise (Dynamic R) scaling by range
     double range = std::sqrt(x_(0)*x_(0) + x_(1)*x_(1) + x_(2)*x_(2));
-    
-    // Scale R based on distance (e.g., at 5000m, R is doubled)
     double scale_factor = 1.0 + (range / 5000.0); 
     Eigen::Matrix2d R_dynamic = R * scale_factor;
-    // =========================================================
-
 
     double px = x_(0), py = x_(1), pz = x_(2);
     double d2 = px*px + py*py;

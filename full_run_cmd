@@ -1,9 +1,15 @@
+cd scripts
 python data_generator.py
-cd build
+
+cd ../build
 cmake --build .
 ./tracking_system
-cd ..
+
+cd ../scripts
 python evaluate_results.py
 
-python run_experiments.py
-python animate_fusion.py
+cd ..
+
+# python run_experiments.py
+# python animate_fusion.py
+# cd ..

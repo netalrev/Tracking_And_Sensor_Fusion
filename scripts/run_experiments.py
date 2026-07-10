@@ -7,20 +7,34 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def load_exp_config():
-    with open('exp_config.yaml', 'r') as f:
+    """
+    Loads the experiment configuration from the YAML file.
+    
+    Returns:
+        dict: The parsed 'experiment' dictionary from ../config/exp_config.yaml.
+    """
+    with open('../config/exp_config.yaml', 'r') as f:
         return yaml.safe_load(f)['experiment']
 
 def backup_config():
-    if os.path.exists('config.yaml'):
-        shutil.copy('config.yaml', 'config_backup.yaml')
+    """
+    Creates a temporary backup of the system configuration file prior to 
+    sensitivity analysis overrides.
+    """
+    if os.path.exists('../config/config.yaml'):
+        shutil.copy('../config/config.yaml', '../config/config_backup.yaml')
 
 def restore_config():
-    if os.path.exists('config_backup.yaml'):
-        shutil.move('config_backup.yaml', 'config.yaml')
+    """
+    Restores the original system configuration file after sensitivity tests 
+    are completed.
+    """
+    if os.path.exists('../config/config_backup.yaml'):
+        shutil.move('../config/config_backup.yaml', '../config/config.yaml')
 
 def modify_config(multiplier, exp_target):
     multiplier = float(multiplier)
-    with open('config_backup.yaml', 'r') as f:
+    with open('../config/config_backup.yaml', 'r') as f:
         config = yaml.safe_load(f)
 
     if exp_target in ['clutter', 'all']:
@@ -37,16 +51,16 @@ def modify_config(multiplier, exp_target):
         config['sensors']['radar']['drop_probability'] = min(config['sensors']['radar']['drop_probability'] * multiplier, 0.50)
         config['sensors']['eo']['drop_probability'] = min(config['sensors']['eo']['drop_probability'] * multiplier, 0.50)
 
-    with open('config.yaml', 'w') as f:
+    with open('../config/config.yaml', 'w') as f:
         yaml.dump(config, f)
 
 def run_full_pipeline():
     subprocess.run(["python", "data_generator.py"], check=True, stdout=subprocess.DEVNULL)
-    subprocess.run(["./tracking_system"], cwd="build", check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["./tracking_system"], cwd="../build", check=True, stdout=subprocess.DEVNULL)
 
 def extract_metrics():
-    gt_df = pd.read_csv('data/ground_truth.csv')
-    fused_df = pd.read_csv('data/fused_tracks.csv')
+    gt_df = pd.read_csv('../data/ground_truth.csv')
+    fused_df = pd.read_csv('../results/fused_tracks.csv')
     
     if 'status' not in fused_df.columns:
         fused_df['status'] = 'CONFIRMED'
@@ -134,7 +148,7 @@ def plot_separate_metrics(results, exp_target):
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.tight_layout()
         
-        filename = f"data/fig8_{exp_target}_metric_{filename_suffix.lower()}.png"
+        filename = f"../results/fig8_{exp_target}_metric_{filename_suffix.lower()}.png"
         plt.savefig(filename)
         plt.close()
         print(f"[+] Saved {filename}")

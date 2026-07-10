@@ -47,13 +47,10 @@ void SensorDataLoader::loadRadarData(const std::string& filepath, EventQueue& qu
     std::string line;
     std::getline(file, line); // Skip header
 
-    // ======================================================
-    // שינוי חשוב: הוספת מרווח ביטחון (Tuning Mismatch)
-    // אנחנו מכניסים בכוונה 25% יותר רעש ממה שהיה בדאטה
-    // זה מוכיח שהמערכת עמידה גם כאשר פרמטרי הרעש אינם מדויקים
-    // ======================================================
+    // Introduce systematic noise inflation to verify filter robustness
+    // Deliberately inflating sensor noise to account for tuning mismatch
     NoiseConfig nc = readNoiseConfig();
-    double safety_factor = 2.0;   // 50% יותר שמרני
+    double safety_factor = 2.0;
 
     Eigen::Matrix4d R_radar;
     double az_rad_std = nc.r_az * M_PI / 180.0 * safety_factor;
@@ -93,11 +90,9 @@ void SensorDataLoader::loadEOData(const std::string& filepath, EventQueue& queue
     std::string line;
     std::getline(file, line); // Skip header
 
-    // ======================================================
-    // שינוי חשוב: הוספת מרווח ביטחון גם ל-EO
-    // ======================================================
+    // Apply scaling safety factor to EO measurements
     NoiseConfig nc = readNoiseConfig();
-    double safety_factor = 2.0;   // 50% יותר שמרני
+    double safety_factor = 2.0;
 
     Eigen::Matrix2d R_eo;
     double eo_az_std = nc.e_az * M_PI / 180.0 * safety_factor;

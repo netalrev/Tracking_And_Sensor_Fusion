@@ -1,9 +1,42 @@
+# =========================
+# C++ / CMake Build Folders
+# =========================
 build/
-temp/
-docs/
-venv/
-tests/
-data/
-__pycache__/
-*.pyc
+bin/
 *.o
+*.out
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# =========================
+# Python & Environments
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+.venv/
+
+# =========================
+# Data & Results
+# =========================
+data/*.csv
+!data/sensor_noise.txt
+results/*
+temp/
+*backup*.yaml
+*.gif
+*.png
+
+# Keep the empty results folder in Git
+!results/.gitkeep
+
+# =========================
+# VSCode / OS Files
+# =========================
+.vscode/
+.DS_Store
+Thumbs.db

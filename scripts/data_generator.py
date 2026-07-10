@@ -13,7 +13,10 @@ warnings.filterwarnings("ignore")
 # ==========================================
 
 class Target:
-    """ Represents a physical maneuvering target (CTRV Model via Euler Integration) """
+    """ 
+    Represents a physical maneuvering target utilizing a Constant Turn Rate and Velocity (CTRV) 
+    Motion Model applied via standard Euler Integration mechanics. 
+    """
     def __init__(self, target_id: int, start_time: float, end_time: float, pos0: list, vel0: list, maneuvers: list, duration: float):
         self.id = target_id
         self.start_time = start_time
@@ -305,8 +308,8 @@ def generate_all_figures(truth_df, radar_df, eo_df):
     ax1_eo.legend(fontsize='small')
     ax1_rad.legend(fontsize='small')
     fig1.tight_layout()
-    fig1.savefig('data/fig1_ground_truth.png')
-    print("[+] Saved data/fig1_ground_truth.png")
+    fig1.savefig('../results/fig1_ground_truth.png')
+    print("[+] Saved ../results/fig1_ground_truth.png")
     
     # -------------------------------------------------------------------------
     # Fig 2: Measurements Only (Left: EO Az/El, Right: RADAR R/Az/El)
@@ -320,8 +323,8 @@ def generate_all_figures(truth_df, radar_df, eo_df):
     ax2_eo.legend(fontsize='small')
     ax2_rad.legend(fontsize='small')
     fig2.tight_layout()
-    fig2.savefig('data/fig2_measurements.png')
-    print("[+] Saved data/fig2_measurements.png")
+    fig2.savefig('../results/fig2_measurements.png')
+    print("[+] Saved ../results/fig2_measurements.png")
     
     # -------------------------------------------------------------------------
     # Fig 3: Combined in Sensor Space (Left: EO Az/El, Right: RADAR R/Az/El)
@@ -335,8 +338,8 @@ def generate_all_figures(truth_df, radar_df, eo_df):
     ax3_eo.set_title('Fig 3: Combined GT + Meas (Left: EO Sensor Space)')
     ax3_rad.set_title('Fig 3: Combined GT + Meas (Right: RADAR Sensor Space)')
     fig3.tight_layout()
-    fig3.savefig('data/fig3_combined_sensor_space.png')
-    print("[+] Saved data/fig3_combined_sensor_space.png")
+    fig3.savefig('../results/fig3_combined_sensor_space.png')
+    print("[+] Saved ../results/fig3_combined_sensor_space.png")
     
     # -------------------------------------------------------------------------
     # Fig 4: Physical Projection (Left: EO Az/El, Right: RADAR XYZ)
@@ -350,13 +353,13 @@ def generate_all_figures(truth_df, radar_df, eo_df):
     ax4_eo.set_title('Fig 4: Physical Projection (Left: EO View)')
     ax4_rad.set_title('Fig 4: Physical Projection (Right: 3D Physical Space XYZ)')
     fig4.tight_layout()
-    fig4.savefig('data/fig4_combined_physical_space.png')
-    print("[+] Saved data/fig4_combined_physical_space.png")
+    fig4.savefig('../results/fig4_combined_physical_space.png')
+    print("[+] Saved ../results/fig4_combined_physical_space.png")
 
 # ==========================================
 # Main
 # ==========================================
-def load_config(config_path: str = "config.yaml") -> dict:
+def load_config(config_path: str = "../config/config.yaml") -> dict:
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
@@ -390,28 +393,28 @@ def main():
         targets.append(Target(t_conf['id'], start_t, end_t, t_conf['initial_position'], t_conf['initial_velocity'], maneuvers, duration))
         
     truth_df = generate_truth_data(targets, duration, config['simulation']['truth_rate_hz'])
-    truth_df.to_csv('data/ground_truth.csv', index=False)
+    truth_df.to_csv('../data/ground_truth.csv', index=False)
     
     radar = RadarSensor("RADAR", config['sensors']['radar'], rng)
     radar_df = radar.generate_measurements(targets, duration)
     radar_export = radar_df.drop(columns=['target_id'])
-    radar_export.to_csv('data/radar.csv', index=False)
+    radar_export.to_csv('../data/radar.csv', index=False)
     
     eo = EOSensor("EO", config['sensors']['eo'], rng)
     eo_df = eo.generate_measurements(targets, duration)
     eo_export = eo_df.drop(columns=['target_id'])
-    eo_export.to_csv('data/eo.csv', index=False)
+    eo_export.to_csv('../data/eo.csv', index=False)
 
     # NEW: Export Noise Config for C++ Kalman Filter
     radar_noise = config['sensors']['radar']['noise_std']
     eo_noise = config['sensors']['eo']['noise_std']
-    with open('data/sensor_noise.txt', 'w') as f:
+    with open('../data/sensor_noise.txt', 'w') as f:
         # Radar: range, az, el, vr
         f.write(f"{radar_noise['range_m']} {radar_noise['azimuth_deg']} {radar_noise['elevation_deg']} {radar_noise['radial_vel_ms']}\n")
         # EO: az, el
         f.write(f"{eo_noise['azimuth_deg']} {eo_noise['elevation_deg']}\n")
         
-    print("[+] Exported Noise configuration to data/sensor_noise.txt")
+    print("[+] Exported Noise configuration to ../data/sensor_noise.txt")
     print("[+] Data generation complete. Generating Visualization Figures...")
     generate_all_figures(truth_df, radar_df, eo_df)
     print("--- Pipeline Execution Complete ---")

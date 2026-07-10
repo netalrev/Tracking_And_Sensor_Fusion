@@ -13,7 +13,7 @@ int main() {
         // Assuming the executable is run from the 'build' directory.
         const std::string radar_file = "../data/radar.csv";
         const std::string eo_file = "../data/eo.csv";
-        const std::string output_file = "../data/fused_tracks.csv";
+        const std::string output_file = "../results/fused_tracks.csv";
 
         // ==========================================
         // TOGGLE: True for Animations (includes TENTATIVE), False for classic Evaluation (CONFIRMED only)

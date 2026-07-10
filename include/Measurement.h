@@ -3,7 +3,8 @@
 #include <Eigen/Dense>
 
 /**
- * @brief Identifies the source of the measurement.
+ * @enum SensorType
+ * @brief Identifies the sensor source of the measurement.
  */
 enum class SensorType {
     RADAR,
@@ -11,41 +12,63 @@ enum class SensorType {
 };
 
 /**
+ * @class Measurement
  * @brief Abstract Base Class for all sensor measurements.
- * Defines the polymorphic interface required by the Event Queue and the Tracker.
+ * 
+ * Defines the polymorphic interface required by the Event Queue and the Tracking Engine.
  */
 class Measurement {
 public:
-    // Virtual destructor is critical for polymorphic base classes to prevent memory leaks
+    /**
+     * @brief Virtual destructor to ensure safe polymorphic destruction.
+     */
     virtual ~Measurement() = default;
 
-    // Core getters that every measurement must implement
+    /**
+     * @brief Retrieves the measurement timestamp.
+     * @return The time of the measurement in seconds.
+     */
     [[nodiscard]] virtual double getTimestamp() const = 0;
+
+    /**
+     * @brief Retrieves the sensor type generating this measurement.
+     * @return SensorType enumerator (e.g., RADAR or EO).
+     */
     [[nodiscard]] virtual SensorType getType() const = 0;
 
     /**
-     * @brief Returns the raw measurement vector (Z).
-     * Using dynamic size (VectorXd) in the interface allows the EKF to process 
-     * both 4D Radar and 2D EO vectors polymorphically.
+     * @brief Retrieves the raw measurement vector (Z).
+     * @return Dynamic size vector capturing the measurement state.
      */
     [[nodiscard]] virtual Eigen::VectorXd getVector() const = 0;
 
     /**
-     * @brief Returns the measurement noise covariance matrix (R).
+     * @brief Retrieves the measurement noise covariance matrix (R).
+     * @return Dynamic size matrix representing measurement uncertainty.
      */
     [[nodiscard]] virtual Eigen::MatrixXd getCovariance() const = 0;
 };
 
 /**
- * @brief Represents a 4D Radar Measurement: [Range, Azimuth, Elevation, Radial Velocity]
+ * @class RadarMeasurement
+ * @brief Represents a 4D Radar Measurement: [Range, Azimuth, Elevation, Radial Velocity].
  */
 class RadarMeasurement : public Measurement {
 private:
-    double timestamp_;
-    Eigen::Vector4d z_; 
-    Eigen::Matrix4d R_; 
+    double timestamp_;        ///< Time of the radar measurement.
+    Eigen::Vector4d z_;       ///< 4D measurement vector.
+    Eigen::Matrix4d R_;       ///< 4x4 measurement noise covariance matrix.
 
 public:
+    /**
+     * @brief Constructor for RadarMeasurement.
+     * @param timestamp Time of the measurement in seconds.
+     * @param range Range in meters.
+     * @param azimuth Azimuth in radians.
+     * @param elevation Elevation in radians.
+     * @param radial_velocity Radial velocity in meters per second.
+     * @param R 4x4 Noise covariance matrix.
+     */
     RadarMeasurement(double timestamp, 
                      double range, 
                      double azimuth, 
@@ -59,21 +82,28 @@ public:
     [[nodiscard]] double getTimestamp() const override { return timestamp_; }
     [[nodiscard]] SensorType getType() const override { return SensorType::RADAR; }
     
-    // Implicit conversion from fixed size (Vector4d/Matrix4d) to dynamic size (VectorXd/MatrixXd)
     [[nodiscard]] Eigen::VectorXd getVector() const override { return z_; }
     [[nodiscard]] Eigen::MatrixXd getCovariance() const override { return R_; }
 };
 
 /**
- * @brief Represents a 2D EO (Electro-Optical) Measurement: [Azimuth, Elevation]
+ * @class EOMeasurement
+ * @brief Represents a 2D Electro-Optical (EO) Measurement: [Azimuth, Elevation].
  */
 class EOMeasurement : public Measurement {
 private:
-    double timestamp_;
-    Eigen::Vector2d z_;
-    Eigen::Matrix2d R_;
+    double timestamp_;        ///< Time of the EO measurement.
+    Eigen::Vector2d z_;       ///< 2D measurement vector.
+    Eigen::Matrix2d R_;       ///< 2x2 measurement noise covariance matrix.
 
 public:
+    /**
+     * @brief Constructor for EOMeasurement.
+     * @param timestamp Time of the measurement in seconds.
+     * @param azimuth Azimuth in radians.
+     * @param elevation Elevation in radians.
+     * @param R 2x2 Noise covariance matrix.
+     */
     EOMeasurement(double timestamp, 
                   double azimuth, 
                   double elevation, 

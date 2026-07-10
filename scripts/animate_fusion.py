@@ -7,11 +7,18 @@ import warnings
 warnings.filterwarnings("ignore")
 
 def load_data():
+    """
+    Loads fused tracking data, targets, and sensor hits into Pandas DataFrames.
+    Automatically converts spherical Radar hits into Cartesian data for proper 3D placement.
+    
+    Returns:
+        tuple: (gt_df, radar_df, eo_df, fused_df) DataFrames for animation processing.
+    """
     print("[+] Loading Data for Animation...")
-    gt_df = pd.read_csv('data/ground_truth.csv')
-    radar_df = pd.read_csv('data/radar.csv')
-    fused_df = pd.read_csv('data/fused_tracks.csv')
-    eo_df = pd.read_csv('data/eo.csv')
+    gt_df = pd.read_csv('../data/ground_truth.csv')
+    radar_df = pd.read_csv('../data/radar.csv')
+    fused_df = pd.read_csv('../results/fused_tracks.csv')
+    eo_df = pd.read_csv('../data/eo.csv')
     
     # Convert Radar Spherical to Cartesian
     az_rad = np.radians(radar_df['azimuth'])
@@ -110,7 +117,7 @@ def animate_system():
     ani = FuncAnimation(fig, update, frames=len(timestamps), interval=100) # 100ms per frame = 10 FPS
     
     # Save as GIF
-    output_path = 'data/tracking_animation.gif'
+    output_path = '../results/tracking_animation.gif'
     ani.save(output_path, writer=PillowWriter(fps=10))
     print(f"[+] Animation saved successfully to '{output_path}'!")
 

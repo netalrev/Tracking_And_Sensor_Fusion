@@ -6,20 +6,16 @@ Track* DataAssociation::findBestMatch(const std::vector<std::unique_ptr<Track>>&
     Track* best_track = nullptr;
     double min_distance = std::numeric_limits<double>::max();
     
-    // =========================================================
-    // שימוש בקבועים המדויקים מ-DataAssociation.h
-    // מכ"ם מקבל 13.277 (עבור 4 דרגות חופש), מצלמה מקבלת 9.21
-    // =========================================================
+    // Strict sensor gating thresholds per degrees of freedom.
+    // Radar threshold corresponding to 4 DoF.
+    // EO threshold corresponding to 2 DoF.
     double gate_threshold = (measurement->getType() == SensorType::RADAR) ? 
                             GATING_THRESHOLD_RADAR : GATING_THRESHOLD_EO;
 
     for (const auto& track : tracks) {
         if (track->getState() == TrackState::DEAD) continue;
 
-        // =========================================================
-        // SCAN MUTEX: 1-to-1 Sensor Constraint.
-        // A track cannot consume multiple hits from the same sensor at the same time.
-        // =========================================================
+        // Skip if target has already consumed a hit from this sensor in current timeframe
         if (track->hasProcessedInScan(measurement)) continue;
 
         double dist_squared = track->getMahalanobisDistance(measurement);
