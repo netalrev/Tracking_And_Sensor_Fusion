@@ -1,5 +1,4 @@
 #include "Track.h"
-#include <iostream>
 #include <cassert>
 
 Track::Track(int id, const Measurement* initial_measurement)
@@ -47,30 +46,10 @@ void Track::update(const Measurement* measurement) {
         ekf_.updateEO(measurement->getVector(), measurement->getCovariance());
         
         last_eo_time_ = measurement->getTimestamp();
-        
-        // =========================================================
-        // ARCHITECTURAL FIX: 
-        // ?מצלמה מורשית להאריך חיים רק למטרה שכבר אושרה (CONFIRMED)
-        // =========================================================
-        // if (state_ == TrackState::CONFIRMED) {
-        //     missed_updates_ = 0;
-        //     time_last_measurement_ = measurement->getTimestamp();
-        // }
     }
 
     if (state_ == TrackState::TENTATIVE && hit_streak_ >= HITS_TO_CONFIRM) {
         state_ = TrackState::CONFIRMED;
-    }
-}
-
-void Track::markMissed() {
-    missed_updates_++;
-    
-    // Note: We do not reset hit_streak_ to 0. A confirmed track remains 
-    // confirmed even if it misses a beat, until it reaches the death threshold.
-    
-    if (missed_updates_ >= MISSES_TO_DEAD) {
-        state_ = TrackState::DEAD;
     }
 }
 

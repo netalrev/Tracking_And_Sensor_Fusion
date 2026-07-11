@@ -43,13 +43,6 @@ public:
     void update(const Measurement* measurement);
 
     /**
-     * @brief Modifies track state variables when a prediction cycle happens without a matched measurement.
-     * 
-     * Increases the coasting (missed) counter and may trigger transition to the DEAD state.
-     */
-    void markMissed();
-
-    /**
      * @brief Computes the Mahalanobis distance metric against a candidate measurement.
      * @param measurement The candidate measurement data for correlation testing.
      * @return The scalar Mahalanobis distance based on target state and measurement noise.
@@ -61,12 +54,7 @@ public:
     // ==========================================
     [[nodiscard]] int getId() const { return track_id_; }
     [[nodiscard]] TrackState getState() const { return state_; }
-    [[nodiscard]] double getLastUpdateTime() const { return time_last_updated_; }
-    
     [[nodiscard]] EKF::Vector6d getKinematicState() const { return ekf_.getState(); }
-    [[nodiscard]] EKF::Matrix6d getCovariance() const { return ekf_.getCovariance(); }
-
-    [[nodiscard]] const EKF& getEKF() const { return ekf_; }
     [[nodiscard]] double getLastMeasurementTime() const { return time_last_measurement_; }
 
     /**
@@ -90,7 +78,6 @@ private:
     int missed_updates_;                     ///< Tracker prediction cycles running without measurement data.
 
     static constexpr int HITS_TO_CONFIRM = 5;///< Configured threshold of hits required for CONFIRMED state.
-    static constexpr int MISSES_TO_DEAD = 5; ///< Configured threshold of misses leading to DEAD state.
 
     double time_last_measurement_;           ///< Timestamp of the last measurement (Radar or EO) that updated this track.
     double last_radar_time_;                 ///< Timestamp of the last Radar measurement that updated this track.
