@@ -1,74 +1,63 @@
-# Multi-Sensor Tracking & Fusion System
+# Tracking and Sensor Fusion System 🎯
 
-A real-time multi-sensor target tracking system that fuses **Radar** (3D spherical) and **Electro-Optical (EO)** measurements using an **Extended Kalman Filter (EKF)** with statistical data association.
+![C++](https://img.shields.io/badge/C++-17-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.8+-yellow.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ## Overview
+This project implements an **Event-Driven Multi-Sensor Tracking and Fusion System**. It is designed to ingest raw, asynchronous, and noisy measurements from multiple sensors (Radar and Electro-Optics/EO) and produce a continuous, reliable 3D kinematic track of multiple targets.
 
-This project implements a complete tracking pipeline capable of handling:
-- Asynchronous multi-rate sensors (Radar @ 1Hz, EO @ 10Hz)
-- Realistic sensor noise, clutter, and measurement drops
-- Continuous tracking during temporary sensor outages
-- Real-time performance requirements
+The primary goal of this project is to demonstrate core concepts in **State Estimation**, **Data Association**, and **System Architecture** under realistic challenges such as sensor noise, false alarms (clutter), missed detections (drops), and asynchronous data rates. 
 
-The system is built in **C++17** with **Eigen** for linear algebra, following an event-driven architecture.
+## 🎥 Visual Demonstration
 
-## Key Features
+### Tracking over Time (Simulation)
+![Tracking Animation](results/tracking_animation.gif)
+*The animation demonstrates the Extended Kalman Filter (EKF) maintaining continuous tracks despite dense clutter and sensor drops. Orange markers indicate raw measurements at time t, the gray is TENTATIVE targets while the continuous lines in color represent the fused track (CONFIRMED).*
 
-- **Extended Kalman Filter** with 6-state Constant Velocity model
-- **Adaptive process noise (Q)** based on predicted target speed
-- **Dynamic measurement noise (R)** with Safety Factor
-- **Mahalanobis Distance** gating with χ² validation thresholds
-- **Scan Mutex** for one-to-one data association
-- **Track lifecycle management** (TENTATIVE → CONFIRMED → DEAD)
-- Support for track coasting during measurement drops
+### Raw Measurements vs. Ground Truth
+<img src="results\fig4_combined_physical_space.png" width="800" alt="Raw Measurements">
+*Simulation of raw sensor data (Radar and EO) including Gaussian noise, dense clutter, and missed detections alongside the ground truth.*
 
-## Project Structure
+### Filtered Tracks vs. Ground Truth
+<img src="results\fig6_eval_physical_space.png" width="800" alt="Filtered Tracks">
+*The final output of the Extended Kalman Filter (EKF) showing the smoothed, estimated tracks (lines) accurately following the target paths despite the target with hard maneuvers inputs (which become DEAD and return with new target ID).*
 
-| Path                  | Description                                      |
-|-----------------------|--------------------------------------------------|
-| `src/`                | Core C++ implementation (EKF, Track, DataAssociation, etc.) |
-| `include/`            | Header files                                     |
-| `tests/`              | Unit tests                                       |
-| `scripts/`            | Python scripts for data generation and evaluation |
-| `config/`             | Configuration files (YAML)                       |
-| `data/`               | Generated sensor data (CSV files)                |
-| `results/`            | Output fused tracks and analysis plots           |
-| `docs/`               | Design documents, mathematical formulas, and appendices |
-| `CMakeLists.txt`      | CMake build configuration                        |
-| `HOW_TO_RUN.md`       | Detailed instructions to build and run the project |
-| `requirements.txt`    | Python dependencies                              |
+### System Architecture
+<img src="results/architecture_diagram.png" width="500" alt="Architecture Diagram">
 
----
+*The system uses a Priority Min-Heap Queue to synchronize asynchronous sensor data based on timestamps, driving the Tracker Manager in a purely event-driven manner.*
+## 🧠 Core Components & How It Works
 
+This is a baseline, yet robust tracking system built on four main pillars:
 
-## Documentation
+1. **Event-Driven Synchronization (Tracker Manager):** Acts as the global clock. Measurements from different sensors are pushed into a priority queue and processed strictly chronologically. This completely solves the issue of asynchronous sensor update rates.
+2. **State Estimation (Extended Kalman Filter - EKF):** Fuses non-linear observation models (Spherical Range/Azimuth/Elevation from Radar, and Az/El from EO) into a 6-DOF Cartesian state vector `(X, Y, Z, Vx, Vy, Vz)`.
+3. **Data Association (GNN):** Uses a **Greedy Nearest Neighbor** approach with statistical gating (Mahalanobis Distance). To handle clutter efficiently without exponential complexity, it enforces a rigid `Scan Mutex`—a track can only associate with one measurement per sensor, per timestamp.
+4. **Lifecycle Management:** Tracks are born as `TENTATIVE` via 3D Radar hits. They upgrade to `CONFIRMED` after 5 consecutive hits (filtering out random noise). If a track receives no updates for 5 seconds, it undergoes "Coasting" (prediction only) before being declared `DEAD` (Starvation).
 
-- [Design Document](docs/Design_Document_Tracking_Sensor_Fusion.pdf)
-- [Mathematical Formulas (EKF)](docs/Math_Formulas_EKF.docx)
-- [Experiments & Results](docs/Experiments_Appendix_Simulation_Results.pdf)
-- [Visual Analysis Appendix](docs/Design_Appendix_Visual_Analysis.pdf)
+## ⚖️ Trade-offs: Baseline vs. Real-World Production
 
-## How to Build and Run
+While this system handles baseline tracking scenarios effectively, developing this into a military-grade or autonomous driving production system would require addressing several calculated trade-offs:
 
-Please refer to the detailed guide:
+| Component | Current Implementation (Baseline) | Real-World / Production Alternative |
+| :--- | :--- | :--- |
+| **Kinematic Model** | **Constant Velocity (CV) EKF:** Uses adaptive process noise ($Q$) to handle moderate maneuvers. Fast and computationally cheap. | **Interacting Multiple Model (IMM):** Running parallel filters (e.g., CV, Constant Acceleration, Coordinated Turn) and mixing their probabilities to handle sharp, unpredictable maneuvers without track-breaks. |
+| **Data Association** | **Greedy Nearest Neighbor (GNN):** Immediate, hard decisions. Very low computational cost, but prone to stealing/swapping in extremely dense target/clutter environments. | **Multiple Hypothesis Tracking (MHT) or JPDA:** Defers hard decisions by keeping a tree of hypotheses over time. Significantly more robust in dense clutter, but requires exponential computational power and pruning logic. |
+| **Track Duplication** | **Survival of the Fittest:** Relies on the `Scan Mutex` to starve duplicate tracks until they die naturally. | **Explicit Track Merging:** Dedicated covariance intersection and statistical testing to actively identify and merge redundant tracks. |
+| **Lifecycle** | **Rigid Thresholds:** Hard 5-second starvation rule and 5-hit confirmation. Leads to initialization delays and overshoot during target loss. | **Dynamic Thresholds:** Track scores (e.g., M/N logic) that dynamically adapt based on target range, kinematics, and real-time sensor confidence. |
+| **Earth Geometry** | **Flat Earth Assumption:** Simple Cartesian-to-Spherical projections. Good for short to medium ranges. | **WGS84 / ECEF:** Accounting for Earth's curvature, crucial for long-range radar tracking (tens/hundreds of kilometers). |
 
-→ [HOW_TO_RUN.md](HOW_TO_RUN.md)
+## 🛠️ Tech Stack & Running the Project
 
-## Technologies
+- **Core Tracker:** `C++` (Object-Oriented, optimized for low latency).
+- **Simulation & Analysis:** `Python` (Pandas, Matplotlib, NumPy) for generating Ground Truth, modeling sensor physics (CTRV model, spherical projections, noise injection), and analyzing RMSE.
 
-- **C++17** + **CMake**
-- **Eigen3** (linear algebra)
-- **Python 3.9+** (data generation & evaluation)
-- **NumPy, Pandas, Matplotlib, PyYAML**
-
-## Design Highlights
-
-- Event-driven architecture with priority queue for sensor synchronization
-- Radar-only track initiation for reliable 3D initialization
-- Greedy Nearest Neighbor + Scan Mutex instead of full MHT (performance trade-off)
-- Adaptive noise models instead of IMM (computational efficiency)
-
-## Author
-
-**Netanel Reuven**  
-Tracking & Sensor Fusion Project – TSG Algorithm Developer Position
+### Quick Start
+1. Clone the repository: `git clone https://github.com/netalrev/Tracking_And_Sensor_Fusion.git`
+2. Generate simulated data: `python simulate_data.py`
+3. Build the C++ tracker via CMake:
+   ```bash
+   mkdir build && cd build
+   cmake ..
+   make
