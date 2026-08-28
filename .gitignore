@@ -25,11 +25,11 @@ venv/
 # =========================
 data/*.csv
 !data/sensor_noise.txt
-results/*
+# results/*
 temp/
 *backup*.yaml
-*.gif
-*.png
+# *.gif
+# *.png
 
 # Keep the empty results folder in Git
 !results/.gitkeep
