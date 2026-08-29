@@ -33,8 +33,51 @@ This is a baseline, yet robust tracking system built on four main pillars:
 
 1. **Event-Driven Synchronization (Tracker Manager):** Acts as the global clock. Measurements from different sensors are pushed into a priority queue and processed strictly chronologically. This completely solves the issue of asynchronous sensor update rates.
 2. **State Estimation (Extended Kalman Filter - EKF):** Fuses non-linear observation models (Spherical Range/Azimuth/Elevation from Radar, and Az/El from EO) into a 6-DOF Cartesian state vector `(X, Y, Z, Vx, Vy, Vz)`.
+> 📐 *For a deep dive into the kinematics, measurement functions, and Jacobians, please refer to the [Mathematical Foundations](docs/EKF_MATH.md) document.*
 3. **Data Association (GNN):** Uses a **Greedy Nearest Neighbor** approach with statistical gating (Mahalanobis Distance). To handle clutter efficiently without exponential complexity, it enforces a rigid `Scan Mutex`—a track can only associate with one measurement per sensor, per timestamp.
 4. **Lifecycle Management:** Tracks are born as `TENTATIVE` via 3D Radar hits. They upgrade to `CONFIRMED` after 5 consecutive hits (filtering out random noise). If a track receives no updates for 5 seconds, it undergoes "Coasting" (prediction only) before being declared `DEAD` (Starvation).
+
+## 💻 Code Spotlight: Core Event Loop
+
+The `TrackerManager` perfectly synchronizes asynchronous sensors using a Priority Min-Heap. The main event loop below highlights a clean separation of tracking phases, efficient memory management (Zero-Copy), and optimized I/O operations:
+
+```cpp
+while (!event_queue_.empty()) {
+    // 1. Peek at the top measurement (Zero-Copy: We just get a raw pointer)
+    const Measurement* measurement = event_queue_.top().get();
+    current_time = measurement->getTimestamp();
+
+    // 2. Predict step: Advance all existing tracks to the new event's time
+    predictAll(current_time);
+
+    // 3. Data Association step: Find the most statistically probable track
+    Track* matched_track = DataAssociation::findBestMatch(active_tracks_, measurement);
+
+    // 4. Update or Initiate step
+    if (matched_track != nullptr)
+    {
+        matched_track->update(measurement);
+    }
+    else
+    {
+        handleUnassociatedMeasurement(measurement);
+    }
+
+    // 5. Memory Management: Pop destroys the unique_ptr and frees the measurement from RAM instantly
+    event_queue_.pop();
+
+    // 6. Track Management: Remove tracks that starved or died
+    cleanupDeadTracks(current_time);
+
+    // 7. Export results at 10Hz intervals (every 0.1 sec)
+    // This prevents creating a massive CSV file with duplicated timestamps
+    if (current_time - last_export_time >= 0.1)
+    {
+        exportTrackStates(current_time, out_file);
+        last_export_time = current_time;
+    }
+}
+```
 
 ## ⚖️ Trade-offs: Baseline vs. Real-World Production
 
